@@ -37,7 +37,7 @@ def self_attention(x, wq, wk, wv):
     k = apply_rope((x @ wk.T).float())
     v = (x @ wv.T).float()
     qk = q @ k.T / (128**0.5) + torch.triu(torch.full((n, n), float("-inf")), 1)
-    qk = torch.nn.functional.softmax(qk, dim=1)
+    qk = F.softmax(qk, dim=1)
     return qk @ v
 
 
