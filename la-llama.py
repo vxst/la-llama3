@@ -62,8 +62,8 @@ def main():
     with torch.inference_mode():
         model = torch.load("Meta-Llama-3-8B/consolidated.00.pth")
 
-        sentence = "For God doth know that in the day ye eat thereof, then your eyes shall be opened, and ye shall be as gods, knowing good and "
-        sentence2 = "But ye shall receive "
+        sentence = "For God doth know that in the day ye eat thereof, then your eyes shall be opened, and ye shall be as gods, knowing good and"
+        sentence2 = "But ye shall receive"
 
         tokenizer = get_tokenizer()
         tokens = torch.tensor(
@@ -88,7 +88,7 @@ def main():
 
         out_tokens = (x @ model["output.weight"].T.float()).argmax(dim=-1)
         print(out_tokens)
-        results = [out_tokens[i-2] for i in eots]
+        results = [out_tokens[i-1] for i in eots]
         print(tokenizer.decode(results))
 
 
