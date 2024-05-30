@@ -7,4 +7,4 @@ understanding of the fundamental workings of the LLAMA3(and generally, Transform
 And it actually works.
 
 (Well, it is intend to generate one token, so I skipped things like real batching(it tied 2 sentences rather
-with stacking, but it's single token generate and not intend to use KV cache anyway)
+with stacking, but it's single token generator and not intend to use KV cache anyway)
