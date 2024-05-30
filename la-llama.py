@@ -120,7 +120,7 @@ def next():
             mha_result, k, v = attention_layer(x, *[model[name] for name in gen_model_layer_names(i)])
             k_cache.append(k.to(torch.float8_e4m3fn))
             v_cache.append(v.to(torch.float8_e4m3fn))
-            ffn_result = ff_layer(mha_result.to(torch.float32), *[model[name] for name in gen_ff_layer_names(i)])
+            ffn_result = ff_layer(mha_result, *[model[name] for name in gen_ff_layer_names(i)])
             x = mha_result.to(torch.float32) + ffn_result
             print(f"Layer {i} done")
 
@@ -140,6 +140,7 @@ def next():
                 mha_result = mha_result + x
                 ffn_result = ff_layer(mha_result, *[model[name] for name in gen_ff_layer_names(i)])
                 x = mha_result + ffn_result
+                print(".", end="", flush=True)
             next_token = (x_0 @ model["output.weight"].T.float()).argmax(dim=-1)[-1]
             tokens = torch.cat([tokens, torch.tensor([next_token])], dim=0)
             print(tokenizer.decode([next_token,]))
