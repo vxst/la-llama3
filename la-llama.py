@@ -96,9 +96,9 @@ def ff_layer(x, w1, w2, w3, norm_weight):
     return (F.silu(x @ w1.T) * (x @ w3.T)) @ w2.T
 
 
-model = torch.load("Meta-Llama-3-8B/consolidated.00.pth")
-def next():
+def main():
     with torch.inference_mode():
+        model = torch.load("Meta-Llama-3-8B/consolidated.00.pth")
         sentence = "In the beginning God"
 
         tokenizer = get_tokenizer()
@@ -150,4 +150,4 @@ def next():
 
 
 if __name__ == "__main__":
-    next()
+    main()
