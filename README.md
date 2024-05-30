@@ -6,5 +6,4 @@ understanding of the fundamental workings of the LLAMA3(and generally, Transform
 
 And it actually works.
 
-(Well, it is intend to generate one token, so I skipped things like real batching(it tied 2 sentences rather
-with stacking, but it's single token generator and not intend to use KV cache anyway)
+This branch includes some additional code for the KV cache, and experiments with using float8 to store the KV cache.

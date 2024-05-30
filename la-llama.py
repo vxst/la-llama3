@@ -38,6 +38,21 @@ def self_attention(x, wq, wk, wv):
     v = (x @ wv.T).float()
     qk = q @ k.T / (128**0.5) + torch.triu(torch.full((n, n), float("-inf")), 1)
     qk = F.softmax(qk, dim=1)
+    return {
+        "r": qk @ v,
+        "k": k,
+        "v": v,
+    }
+
+def self_attention_get_k_v(add_x, wk, wv, n):
+    k = apply_rope((add_x @ wk.T).float(), idx=n)
+    v = (add_x @ wv.T).float()
+    return k, v
+    
+def self_attention_append(add_x, wq, k, v, n):
+    q = apply_rope((add_x @ wq.T).float(), idx=n)
+    qk = q @ k.T / (128**0.5) + torch.triu(torch.full((n+1, n+1), float("-inf")), 1)
+    qk = F.softmax(qk, dim=1)
     return qk @ v
 
 
@@ -47,7 +62,30 @@ def attention_layer(x, wq, wk, wv, wo, norm_weight):
     wk = wk.view(config["n_kv_heads"], config["dim"] // config["n_heads"], config["dim"]).float()
     wv = wv.view(config["n_kv_heads"], config["dim"] // config["n_heads"], config["dim"]).float()
     heads = [self_attention(x_norm, wq[i], wk[i//4], wv[i//4]) for i in range(config["n_heads"])]
-    return torch.cat(heads, dim=-1) @ wo.T.float() + x
+    heads_k = torch.cat([head["k"] for head in heads], dim=-1)
+    heads_v = torch.cat([head["v"] for head in heads], dim=-1)
+    heads_r = torch.cat([head["r"] for head in heads], dim=-1)
+    return heads_r @ wo.T.float() + x, heads_k, heads_v
+
+
+def attention_layer_append(add_x, k, v, n, wq, wk, wv, wo, norm_weight):
+    add_x_norm = rms_norm(add_x, norm_weight)
+    k = k.float()
+    v = v.float()
+    wq = wq.view(config["n_heads"], config["dim"] // config["n_heads"], config["dim"]).float()
+    wk = wk.view(config["n_kv_heads"], config["dim"] // config["n_heads"], config["dim"]).float()
+    wv = wv.view(config["n_kv_heads"], config["dim"] // config["n_heads"], config["dim"]).float()
+    heads_kv = [self_attention_get_k_v(add_x_norm, wk[i//4], wv[i//4], n) for i in range(config["n_heads"])]
+    add_k = torch.cat([head[0] for head in heads_kv]).reshape(-1, config["dim"])
+    add_v = torch.cat([head[1] for head in heads_kv]).reshape(-1, config["dim"])
+    heads_k = torch.cat([k, add_k], dim=0)
+    heads_v = torch.cat([v, add_v], dim=0)
+    heads = [self_attention_append(
+                add_x_norm,
+                wq[i],
+                heads_k[:, i*128:(i+1)*128], heads_v[:, i*128:(i+1)*128], n) for i in range(config["n_heads"])]
+    heads_r = torch.cat(heads, dim=-1)
+    return heads_r @ wo.T.float(), heads_k, heads_v
 
 
 def ff_layer(x, w1, w2, w3, norm_weight):
@@ -58,39 +96,57 @@ def ff_layer(x, w1, w2, w3, norm_weight):
     return (F.silu(x @ w1.T) * (x @ w3.T)) @ w2.T
 
 
-def main():
+model = torch.load("Meta-Llama-3-8B/consolidated.00.pth")
+def next():
     with torch.inference_mode():
-        model = torch.load("Meta-Llama-3-8B/consolidated.00.pth")
-
-        sentence = "For God doth know that in the day ye eat thereof, then your eyes shall be opened, and ye shall be as gods, knowing good and"
-        sentence2 = "But ye shall receive"
+        sentence = "In the beginning God"
 
         tokenizer = get_tokenizer()
         tokens = torch.tensor(
-            tokenizer.encode('<|begin_of_text|>' + sentence + '<|end_of_text|>'
-                             + '<|begin_of_text|>' + sentence2 + '<|end_of_text|>'
-                             , allowed_special={'<|begin_of_text|>', '<|end_of_text|>'})
+            tokenizer.encode('<|begin_of_text|>' + sentence
+                             , allowed_special={'<|begin_of_text|>'})
         )
-        end_of_text = tokenizer.encode('<|end_of_text|>', allowed_special={'<|end_of_text|>'})[0]
-        eots = [i for i, x in enumerate(tokens) if x == end_of_text]
 
         embedding = torch.nn.Embedding(config["vocab_size"], config["dim"])
         embedding.weight.data.copy_(model["tok_embeddings.weight"])
         embedded_tokens = embedding(tokens)
+        print(embedded_tokens.shape)
+
 
         x = embedded_tokens
+        k_cache = []
+        v_cache = []
         for i in range(config["n_layers"]):
-            mha_result = attention_layer(x, *[model[name] for name in gen_model_layer_names(i)])
-            ffn_result = ff_layer(mha_result, *[model[name] for name in gen_ff_layer_names(i)])
-            x = mha_result + ffn_result
+            mha_result, k, v = attention_layer(x, *[model[name] for name in gen_model_layer_names(i)])
+            k_cache.append(k.to(torch.float8_e4m3fn))
+            v_cache.append(v.to(torch.float8_e4m3fn))
+            ffn_result = ff_layer(mha_result.to(torch.float32), *[model[name] for name in gen_ff_layer_names(i)])
+            x = mha_result.to(torch.float32) + ffn_result
             print(f"Layer {i} done")
-        x = rms_norm(x, model["norm.weight"])
 
-        out_tokens = (x @ model["output.weight"].T.float()).argmax(dim=-1)
-        print(out_tokens)
-        results = [out_tokens[i-1] for i in eots]
-        print(tokenizer.decode(results))
+        next_token = (x @ model["output.weight"].T.float()).argmax(dim=-1)[-1]
+        print(tokenizer.decode([next_token,]))
+        current_seq_len = tokens.shape[0]
+        tokens = torch.cat([tokens, torch.tensor([next_token])], dim=0)
+        
+        for n in range(current_seq_len, 20):
+            embedded_tokens = torch.cat([embedded_tokens, embedding(next_token).reshape(1, -1)], dim=0)
+            x = embedded_tokens
+            for i in range(config["n_layers"]):
+                x_0 = x[-1:, ]
+                mha_result, k, v = attention_layer_append(x_0, k_cache[i], v_cache[i], n, *[model[name] for name in gen_model_layer_names(i)])
+                k_cache[i] = k.to(torch.float8_e4m3fn)
+                v_cache[i] = v.to(torch.float8_e4m3fn)
+                mha_result = mha_result + x
+                ffn_result = ff_layer(mha_result, *[model[name] for name in gen_ff_layer_names(i)])
+                x = mha_result + ffn_result
+            next_token = (x_0 @ model["output.weight"].T.float()).argmax(dim=-1)[-1]
+            tokens = torch.cat([tokens, torch.tensor([next_token])], dim=0)
+            print(tokenizer.decode([next_token,]))
+            if tokenizer.decode([next_token,]) == ".":
+                break
+        print(tokenizer.decode(tokens.tolist()[1:]))
 
 
 if __name__ == "__main__":
-    main()
+    next()
