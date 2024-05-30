@@ -2,6 +2,7 @@ import torch
 from torch.functional import F
 from tokenizer import get_tokenizer
 from rope import apply_rope
+import re
 
 
 config = {
@@ -99,7 +100,7 @@ def ff_layer(x, w1, w2, w3, norm_weight):
 def main():
     with torch.inference_mode():
         model = torch.load("Meta-Llama-3-8B/consolidated.00.pth")
-        sentence = "In the beginning God"
+        sentence = "Hear me, my God, as I voice my complaint; protect"
 
         tokenizer = get_tokenizer()
         tokens = torch.tensor(
@@ -118,8 +119,8 @@ def main():
         v_cache = []
         for i in range(config["n_layers"]):
             mha_result, k, v = attention_layer(x, *[model[name] for name in gen_model_layer_names(i)])
-            k_cache.append(k.to(torch.float8_e4m3fn))
-            v_cache.append(v.to(torch.float8_e4m3fn))
+            k_cache.append(k.to(torch.float8_e5m2))
+            v_cache.append(v.to(torch.float8_e5m2))
             ffn_result = ff_layer(mha_result, *[model[name] for name in gen_ff_layer_names(i)])
             x = mha_result.to(torch.float32) + ffn_result
             print(f"Layer {i} done")
@@ -129,22 +130,22 @@ def main():
         current_seq_len = tokens.shape[0]
         tokens = torch.cat([tokens, torch.tensor([next_token])], dim=0)
         
-        for n in range(current_seq_len, 20):
+        for n in range(current_seq_len, 30):
             embedded_tokens = torch.cat([embedded_tokens, embedding(next_token).reshape(1, -1)], dim=0)
             x = embedded_tokens
             for i in range(config["n_layers"]):
                 x_0 = x[-1:, ]
                 mha_result, k, v = attention_layer_append(x_0, k_cache[i], v_cache[i], n, *[model[name] for name in gen_model_layer_names(i)])
-                k_cache[i] = k.to(torch.float8_e4m3fn)
-                v_cache[i] = v.to(torch.float8_e4m3fn)
+                k_cache[i] = k.to(torch.float8_e5m2)
+                v_cache[i] = v.to(torch.float8_e5m2)
                 mha_result = mha_result + x
                 ffn_result = ff_layer(mha_result, *[model[name] for name in gen_ff_layer_names(i)])
                 x = mha_result + ffn_result
                 print(".", end="", flush=True)
-            next_token = (x_0 @ model["output.weight"].T.float()).argmax(dim=-1)[-1]
+            next_token = (x @ model["output.weight"].T.float()).argmax(dim=-1)[-1]
             tokens = torch.cat([tokens, torch.tensor([next_token])], dim=0)
             print(tokenizer.decode([next_token,]))
-            if tokenizer.decode([next_token,]) == ".":
+            if re.match(r"^\.", tokenizer.decode([next_token,])):
                 break
         print(tokenizer.decode(tokens.tolist()[1:]))
 
