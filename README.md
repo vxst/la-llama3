@@ -6,5 +6,4 @@ understanding of the fundamental workings of the LLAMA3(and generally, Transform
 
 And it actually works.
 
-(Well, it is intend to generate one token, so I skipped things like real batching(it tied 2 sentences rather
-with stacking, but it's single token generator and not intend to use KV cache anyway)
+For a version with KV Cache, check out the [kv_cache](https://github.com/vxst/la-llama3/tree/kv_cache) branch.
