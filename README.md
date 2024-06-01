@@ -7,3 +7,23 @@ understanding of the fundamental workings of the LLAMA3(and generally, Transform
 And it actually works.
 
 This branch includes some additional code for the KV cache, and experiments with using float8 to store the KV cache.
+
+## 2 bit K Cache
+
+This branch experiments with DCT to reduce K cache to 2 bits per value, which is a 16x reduction in memory usage.
+
+And it actually works.
+
+For example,
+
+```
+So God created mankind in his own image, in the image of God he created them; male and female he created them.
+```
+
+Is generated  from
+
+```
+So God created mankind in his own image, in the image of God
+```
+
+With 2 bit K cache!

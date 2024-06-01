@@ -2,6 +2,7 @@ import torch
 from torch.functional import F
 from tokenizer import get_tokenizer
 from rope import apply_rope
+from dct import dct_and_idct
 import re
 
 
@@ -100,7 +101,7 @@ def ff_layer(x, w1, w2, w3, norm_weight):
 def main():
     with torch.inference_mode():
         model = torch.load("Meta-Llama-3-8B/consolidated.00.pth")
-        sentence = "Hear me, my God, as I voice my complaint; protect"
+        sentence = "So God created mankind in his own image, in the image of God"
 
         tokenizer = get_tokenizer()
         tokens = torch.tensor(
@@ -119,7 +120,7 @@ def main():
         v_cache = []
         for i in range(config["n_layers"]):
             mha_result, k, v = attention_layer(x, *[model[name] for name in gen_model_layer_names(i)])
-            k_cache.append(k.to(torch.float8_e5m2))
+            k_cache.append(dct_and_idct(k))
             v_cache.append(v.to(torch.float8_e5m2))
             ffn_result = ff_layer(mha_result, *[model[name] for name in gen_ff_layer_names(i)])
             x = mha_result.to(torch.float32) + ffn_result
@@ -136,7 +137,7 @@ def main():
             for i in range(config["n_layers"]):
                 x_0 = x[-1:, ]
                 mha_result, k, v = attention_layer_append(x_0, k_cache[i], v_cache[i], n, *[model[name] for name in gen_model_layer_names(i)])
-                k_cache[i] = k.to(torch.float8_e5m2)
+                k_cache[i] = dct_and_idct(k)
                 v_cache[i] = v.to(torch.float8_e5m2)
                 mha_result = mha_result + x
                 ffn_result = ff_layer(mha_result, *[model[name] for name in gen_ff_layer_names(i)])
