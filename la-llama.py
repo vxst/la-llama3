@@ -2,7 +2,7 @@ import torch
 from torch.functional import F
 from tokenizer import get_tokenizer
 from rope import apply_rope
-from dct import dct_and_idct
+from dct import k_compress_uncompress
 import re
 
 
@@ -120,7 +120,7 @@ def main():
         v_cache = []
         for i in range(config["n_layers"]):
             mha_result, k, v = attention_layer(x, *[model[name] for name in gen_model_layer_names(i)])
-            k_cache.append(dct_and_idct(k))
+            k_cache.append(k_compress_uncompress(k))
             v_cache.append(v.to(torch.float8_e5m2))
             ffn_result = ff_layer(mha_result, *[model[name] for name in gen_ff_layer_names(i)])
             x = mha_result.to(torch.float32) + ffn_result
@@ -137,7 +137,7 @@ def main():
             for i in range(config["n_layers"]):
                 x_0 = x[-1:, ]
                 mha_result, k, v = attention_layer_append(x_0, k_cache[i], v_cache[i], n, *[model[name] for name in gen_model_layer_names(i)])
-                k_cache[i] = dct_and_idct(k)
+                k_cache[i] = k_compress_uncompress(k)
                 v_cache[i] = v.to(torch.float8_e5m2)
                 mha_result = mha_result + x
                 ffn_result = ff_layer(mha_result, *[model[name] for name in gen_ff_layer_names(i)])
