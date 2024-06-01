@@ -12,7 +12,11 @@ This branch includes some additional code for the KV cache, and experiments with
 
 This branch experiments with DCT to reduce K cache to 2 bits per value, which is a 16x reduction in memory usage.
 
-And it actually works.
+## 4 bit V Cache
+
+This branch experiments with DCT to reduce V cache to 4 bits per value, which is a 8x reduction in memory usage.
+
+## And it actually works
 
 For example,
 
@@ -20,10 +24,10 @@ For example,
 So God created mankind in his own image, in the image of God he created them; male and female he created them.
 ```
 
-Is generated  from
+Is generated from
 
 ```
 So God created mankind in his own image, in the image of God
 ```
 
-With 2 bit K cache!
+With 2 bit K cache and 4 bit V cache!
