@@ -8,13 +8,9 @@ And it actually works.
 
 This branch includes some additional code for the KV cache, and experiments with using float8 to store the KV cache.
 
-## 2 bit K Cache
+## 2 bit K Cache and 4 bit V Cache
 
-This branch experiments with DCT to reduce K cache to 2 bits per value, which is a 16x reduction in memory usage.
-
-## 4 bit V Cache
-
-This branch experiments with DCT to reduce V cache to 4 bits per value, which is a 8x reduction in memory usage.
+This branch experiments with DCT to reduce K cache to 2 bits per value, which is a 10x reduction in memory usage.
 
 ## And it actually works
 
@@ -31,3 +27,10 @@ So God created mankind in his own image, in the image of God
 ```
 
 With 2 bit K cache and 4 bit V cache!
+
+## Comparison
+
+This compression is done per token separately with fixed length per token.
+
+So it can be efficient implemented with PagedAttention, without the need of full reload/save like
+other cache compression methods, e.g. [KIVI](https://arxiv.org/abs/2402.02750)(which uses per channel compression).
