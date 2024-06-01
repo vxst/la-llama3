@@ -10,7 +10,7 @@ This branch includes some additional code for the KV cache, and experiments with
 
 ## 2 bit K Cache and 4 bit V Cache
 
-This branch experiments with DCT to reduce K cache to 2 bits per value, which is a 10x reduction in memory usage.
+This branch experiments with DCT to reduce K cache to 2 bits per value, and V cache to 4 bits per value, which is a 10x reduction in memory usage.
 
 ## And it actually works
 
