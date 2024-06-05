@@ -53,7 +53,7 @@ def self_attention_get_k_v(add_x, wk, wv, n):
     
 def self_attention_append(add_x, wq, k, v, n):
     q = apply_rope((add_x @ wq.T).float(), idx=n)
-    qk = q @ k.T / (128**0.5) + torch.triu(torch.full((n+1, n+1), float("-inf")), 1)
+    qk = q @ k.T / (128**0.5)
     qk = F.softmax(qk, dim=1)
     return qk @ v
 
@@ -134,16 +134,16 @@ def main():
         for n in range(current_seq_len, 30):
             embedded_tokens = torch.cat([embedded_tokens, embedding(next_token).reshape(1, -1)], dim=0)
             x = embedded_tokens
+            x_0 = x[-1:, ]
             for i in range(config["n_layers"]):
-                x_0 = x[-1:, ]
                 mha_result, k, v = attention_layer_append(x_0, k_cache[i], v_cache[i], n, *[model[name] for name in gen_model_layer_names(i)])
                 k_cache[i] = k_compress_uncompress(k)
                 v_cache[i] = v_compress_uncompress(v)
-                mha_result = mha_result + x
+                mha_result = mha_result + x_0
                 ffn_result = ff_layer(mha_result, *[model[name] for name in gen_ff_layer_names(i)])
-                x = mha_result + ffn_result
+                x_0 = mha_result + ffn_result
                 print(".", end="", flush=True)
-            next_token = (x @ model["output.weight"].T.float()).argmax(dim=-1)[-1]
+            next_token = (x_0 @ model["output.weight"].T.float()).argmax(dim=-1)[-1]
             tokens = torch.cat([tokens, torch.tensor([next_token])], dim=0)
             print(tokenizer.decode([next_token,]))
             if re.match(r"^\.", tokenizer.decode([next_token,])):
